@@ -1,0 +1,1 @@
+import LeanProtocPlugin.google.protobuf.compiler.plugin

@@ -1,0 +1,4 @@
+*.lock
+.vscode
+result
+build

@@ -75,6 +75,7 @@ end
 
 deriving instance BEq for Version, CodeGeneratorRequest, CodeGeneratorResponse_File, CodeGeneratorResponse
 deriving instance InhabitedMut for Version, CodeGeneratorRequest, CodeGeneratorResponse_File, CodeGeneratorResponse
+deriving instance Repr for Version, CodeGeneratorRequest, CodeGeneratorResponse_File, CodeGeneratorResponse
 #eval "Defined deriving"
 
 def Version.major : Version -> (Option (Int))

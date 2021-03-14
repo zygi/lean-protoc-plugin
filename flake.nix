@@ -18,6 +18,9 @@
 
   outputs = { self, lean, flake-utils, leanproto, assrt-command, nixpkgs, leanrulewrapper, nix}: flake-utils.lib.eachDefaultSystem (system:
     let
+      pkgs = import nixpkgs {
+        inherit system;
+      };
       leanPkgs = lean.packages.${system};
       pkg = leanPkgs.buildLeanPackage {
         name = "LeanProtocPlugin";  # must match the name of the top-level .lean file
@@ -25,10 +28,22 @@
         deps = [leanproto.packages.${system} assrt-command.packages.${system}];
         # pluginDeps = [leanproto-native.packages.${system}.sharedLib];
       };
+      runGenerator = inpPathsStrList: inpRootStr: namespaceStr: pluginPathStr: pkgs.stdenv.mkDerivation {
+        inherit system;
+        name = "protoc-lean";
+        buildCommand = ''
+          mkdir -p $out/${namespaceStr}
+          ln -s ${pkgs.lib.traceVal pluginPathStr} ./protoc-gen-lean 
+          ${pkgs.protobuf}/bin/protoc --plugin=protoc-gen-lean -I${inpRootStr} --lean_out=$out/${namespaceStr} \
+            --lean_opt=${namespaceStr}  ${pkgs.lib.concatStringsSep " " inpPathsStrList}
+        '';
+      };
     in {
       packages = pkg // {
         inherit (leanPkgs) lean;
-      # } // (builtins.trace leanrulewrapper {}) ;
+
+        runGenerator = runGenerator ["${pkg.src}/proto/google/protobuf/descriptor.proto"] 
+          "${pkg.src}/proto" "Generated" "${pkg.executable}/bin/${pkg.executable.name}";
       } // ((import leanrulewrapper) { inherit pkg system nixpkgs nix; });
 
       defaultPackage = pkg.modRoot;

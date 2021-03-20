@@ -3,9 +3,6 @@
 
   inputs.nixpkgs.url = github:NixOS/nixpkgs/nixpkgs-unstable;
 
-  inputs.leanrulewrapper.url = "path:../lean-nix-helpers/leanRuleWrapper.nix";
-  inputs.leanrulewrapper.flake = false;
-
   inputs.leanShell.url = "path:../lean-nix-helpers/leanShell.nix";
   inputs.leanShell.flake = false;
 
@@ -18,7 +15,7 @@
   inputs.assrt-command.url = github:pnwamk/lean4-assert-command;
   inputs.assrt-command.inputs.lean.follows = "lean";
 
-  outputs = { self, lean, flake-utils, leanproto, assrt-command, nixpkgs, leanrulewrapper, leanShell, nix}: flake-utils.lib.eachDefaultSystem (system:
+  outputs = { self, lean, flake-utils, leanproto, assrt-command, nixpkgs, leanShell, nix}: flake-utils.lib.eachDefaultSystem (system:
     let
       pkgs = import nixpkgs {
         inherit system;
@@ -30,24 +27,23 @@
         deps = [leanproto.packages.${system} assrt-command.packages.${system}];
         # pluginDeps = [leanproto-native.packages.${system}.sharedLib];
       };
-      runGenerator = inpPathsStrList: inpRootStr: namespaceStr: pluginPathStr: pkgs.stdenv.mkDerivation {
-        inherit system;
-        name = "protoc-lean";
-        buildCommand = ''
-          mkdir -p $out/${namespaceStr}
-          ln -s ${pkgs.lib.traceVal pluginPathStr} ./protoc-gen-lean 
-          ${pkgs.protobuf}/bin/protoc --plugin=protoc-gen-lean -I${inpRootStr} --lean_out=$out/${namespaceStr} \
-            --lean_opt=${namespaceStr}  ${pkgs.lib.concatStringsSep " " inpPathsStrList}
-        '';
-      };
+
+      
+
+      leanProtoPackageLib = import ./leanProtoPackage.nix { inherit pkgs system leanPkgs leanproto; generator = pkg; };      
+      runGeneratorPkg = (pkgs.lib.traceValSeqN 2 leanProtoPackageLib).leanProtoPackage ["${pkg.src}/proto/google/protobuf/descriptor.proto" "${pkg.src}/proto/google/protobuf/compiler/plugin.proto"] 
+        "${pkg.src}/proto" "Generated";
+
     in {
       packages = pkg // {
         inherit (leanPkgs) lean;
 
-        runGenerator = runGenerator ["${pkg.src}/proto/google/protobuf/descriptor.proto"] 
-          "${pkg.src}/proto" "Generated" "${pkg.executable}/bin/${pkg.executable.name}";
+        runGenerator = leanProtoPackageLib.runGenerator ["${pkg.src}/proto/google/protobuf/descriptor.proto" "${pkg.src}/proto/google/protobuf/compiler/plugin.proto"] 
+          "${pkg.src}/proto" "Generated";
         print-lean-deps = leanPkgs.print-lean-deps;
-      } // ((import leanrulewrapper) { inherit pkg system nixpkgs; nix = leanPkgs.nix; });
+        pkgMR = runGeneratorPkg.modRoot;
+        pb = pkgs.protobuf;
+      };
 
       defaultPackage = pkg.modRoot;
 

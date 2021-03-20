@@ -1,0 +1,13 @@
+diff --git a/Makefile.am b/Makefile.am
+index 53b259480..da2625366 100644
+--- a/Makefile.am
++++ b/Makefile.am
+@@ -9,7 +9,7 @@ AUTOMAKE_OPTIONS = foreign
+ SUBDIRS = . src
+ 
+ # Always include third_party directories in distributions.
+-DIST_SUBDIRS = src conformance benchmarks third_party/googletest
++DIST_SUBDIRS = src conformance benchmarks
+ 
+ # Build gmock before we build protobuf tests.  We don't add gmock to SUBDIRS
+ # because then "make check" would also build and run all of gmock's own tests,

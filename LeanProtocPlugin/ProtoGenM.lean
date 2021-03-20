@@ -55,12 +55,15 @@ def ctxFindOneof (s: String) : ProtoGenM $ Option (ASTPath × OneofDescriptorPro
 def ctxFindMessage (s: String) : ProtoGenM $ Option ASTPath := do
   let ctx ← read; return ctx.messageDescriptorMap.find? s
 
-def ASTPath.init (file: FileDescriptorProto) : ASTPath :=
+def ASTPath.init (file: FileDescriptorProto) (rootPackage: String): ASTPath :=
   { file := file,
     revMessages := [],
-    leanModule := protoPackageToLeanPackagePrefix file.package.get!,
+    leanModule := rootPackage ++ "." ++ protoPackageToLeanPackagePrefix file.package.get!,
     leanName := "",
     protoFullPath := "." ++ file.package.getI}
+
+def ASTPath.initM (file: FileDescriptorProto): ProtoGenM ASTPath := do
+  return ASTPath.init file (← read).namespacePrefix
 
 def ASTPath.addMessage (m: ASTPath) (m2 : DescriptorProto) : ASTPath :=
   let newMessageName := protoMessageNameToLean m2.name.get!

@@ -32,12 +32,15 @@ def defaultImports (sourceFilename: String) : Array String := #[
 
 def defaultSettings : Array String := #[
   "set_option maxHeartbeats 10000000",
-  "set_option genSizeOfSpec false"
+  "set_option genSizeOfSpec false",
+  "",
+  "open Std (AssocList)"
 ]
 
 def addImportDeps (f: FileDescriptorProto): ProtoGenM Unit := do
+  addLine ""
   let namespacePrefix := (← read).namespacePrefix
-  let paths := f.dependency.map (filePathToPackage ∘ fun s => namespacePrefix ++ "." ++ s)
+  let paths := f.dependency.map (fun s => namespacePrefix ++ "." ++ filePathToPackage s)
   let importCommands ← paths.mapM (s!"import {·}")
   addLines importCommands
 
@@ -66,26 +69,21 @@ def prepareContextRecurseFile (d: ASTPath) (_: Unit): StateM ContextPrepState Un
     messages := s.messages ++ extraS.messages
     : ContextPrepState}
 
-def prepareContext (r: compiler.CodeGeneratorRequest) : ContextPrepState :=   
+def prepareContext (r: compiler.CodeGeneratorRequest) (rootPackage: String): ContextPrepState :=   
   let rec doWork (f: FileDescriptorProto) : StateM ContextPrepState PUnit := do
-    recurseM ((ASTPath.init f), ()) (wrapRecurseFn prepareContextRecurseFile)
+    recurseM ((ASTPath.init f rootPackage), ()) (wrapRecurseFn prepareContextRecurseFile)
   let doWorkM := r.protoFile.forM $ doWork
   StateT.run doWorkM {} |> Id.run |> Prod.snd
 
 def doWork (file: FileDescriptorProto) : ProtoGenM CodeGeneratorResponse_File := do
-  let contextAux ← read
-  for e in contextAux.messageDescriptorMap do
-    -- for f in e.fst do
-    IO.eprintln s!"{e.fst} {← messageFullLeanPath e.snd}"
-
-  for e in contextAux.enumDescriptorMap do
-    -- for f in e.fst do
-    IO.eprintln s!"{e.fst} {← enumFullLeanPath e.snd}"
-
   addLines $ defaultImports file.name.get!
   addImportDeps file
   addLine ""
   addLines $ defaultSettings
+  addLine ""
+    
+  let package := (← read).namespacePrefix ++ "." ++ protoPackageToLeanPackagePrefix file.package.get! 
+  addLine s!"namespace {package}"
   addLine ""
 
   generateEnumDeclarations file
@@ -96,27 +94,39 @@ def doWork (file: FileDescriptorProto) : ProtoGenM CodeGeneratorResponse_File :=
 
   generateMessageManualDerives file
 
-
   addLines #["", "mutual", ""]
   generateDeserializers file
   addLines #["", "end", ""]
 
-  return CodeGeneratorResponse_File.mk (protoFilePathToLeanFilePath file.name.get!) none ("\n".intercalate (← get).lines.toList) none
+  addLines #["", "mutual", ""]
+  generateSerializers file
+  addLines #["", "end", ""]
+
+  generateSerDeserInstances file
+
+  addLine ""
+  addLine s!"end {package}"
+
+  return CodeGeneratorResponse_File.mk (outputFilePath file (← read).namespacePrefix) none ("\n".intercalate (← get).lines.toList) none
 
 def main(argv: List String): IO UInt32 := do
   let i ← IO.getStdin
   let o ← IO.getStdout
-  
+
+  let makeErrorResponse (s: String) := CodeGeneratorResponse.mk (some s) none #[]  
+
   let bytes ← i.readBinToEnd
   let request ← Except.unwrap $ LeanProto.ProtoDeserialize.deserialize (α:=CodeGeneratorRequest) bytes
 
-  let namespacePrefix := request.parameter.get!
+  let namespacePrefix ← match request.parameter with
+    | some x => x 
+    | none => o.write $ LeanProto.ProtoSerialize.serialize $ makeErrorResponse "Must provide root package name as protoc parameter"; return 0
 
   let filesToWrite := rbtreeOfC request.fileToGenerate
   let fileProtos := rbmapOfC (request.protoFile.map fun x => (x.name.get!, x))
   let fileProtosToWrite := request.protoFile.filter fun v => filesToWrite.contains v.name.get!
 
-  let contextAux := prepareContext request
+  let contextAux := prepareContext request namespacePrefix
   let ctxForFile (f: FileDescriptorProto) := ProtoGenContext.mk namespacePrefix fileProtos f
     (rbmapOfC contextAux.enums)
     (rbmapOfC contextAux.oneofs)
@@ -126,10 +136,15 @@ def main(argv: List String): IO UInt32 := do
     StateT.run' (ReaderT.run (doWork f) (ctxForFile f)) {}  
 
   let response : CodeGeneratorResponse ← do try
-    let processed : Array CodeGeneratorResponse_File ← fileProtosToWrite.mapM processFile
+    let mut processed : Array CodeGeneratorResponse_File ← fileProtosToWrite.mapM processFile
+
+    let allNewModules := filesToWrite.fold (fun acc s => (namespacePrefix ++ "." ++ filePathToPackage s) :: acc) []
+    let rootFileText := "\n".intercalate $ allNewModules.map (s!"import {·}")  
+    processed := processed.push $ CodeGeneratorResponse_File.mk (some $ namespacePrefix ++ ".lean") none (some rootFileText) none
+
     CodeGeneratorResponse.mk none none processed
   catch e: IO.Error =>
-    CodeGeneratorResponse.mk (some e.toString) none #[]  
+    makeErrorResponse e.toString
 
   o.write $ LeanProto.ProtoSerialize.serialize response
 

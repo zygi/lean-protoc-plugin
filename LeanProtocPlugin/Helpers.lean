@@ -41,7 +41,7 @@ abbrev Std.RBTreeC (α) [HasLess α] [(a b : α) → Decidable (a < b)] := Std.R
 -- def Array.joinOn (x: Array String) (sep: String) := x.foldl (fun r s => r ++ sep ++ s) sep
 def String.stripFileEnding (s: String) := (s.dropRightWhile (· != '.')).dropRight 1
 
-def packageNameToLean (s: String) := (s.toCamelCase true)
+def packageNamePieceToLean (s: String) := (s.toCamelCase true)
 def fileTopNameToLean (s: String) := (s.toCamelCase true)
 def protoMessageNameToLean (s: String) := (s.toCamelCase true)
 def protoEnumNameToLean (s: String) := (s.toCamelCase true)
@@ -57,7 +57,7 @@ def filePathPartsToLeanPackageParts (x: List String) :=
   let rec work : List String -> List String
     | List.nil => List.nil
     | s :: List.nil => fileTopNameToLean s :: List.nil
-    | s :: xs => packageNameToLean s :: work xs 
+    | s :: xs => packageNamePieceToLean s :: work xs 
   work x
 
 def filePathToPackage (s: String) : String := do
@@ -68,9 +68,11 @@ def protoFilePathToLeanFilePath (s: String) : String := do
   let f := filePathPartsToLeanPackageParts $ s.stripFileEnding.splitOn "/"
   ("/".intercalate f) ++ ".lean"
 
+#assert (filePathToPackage "google/protobuf/compiler/plugin.proto") == "Google.Protobuf.Compiler.Plugin"
+
 def protoPackageToLeanPackagePrefix (s: String) : String :=
   let trimmed := if s.get 0 == '.' then s.drop 1 else s 
-  trimmed.splitOn "." |> (·.map packageNameToLean) |> (".".intercalate ·)
+  trimmed.splitOn "." |> (·.map packageNamePieceToLean) |> (".".intercalate ·)
 
 
 partial def IO.FS.Stream.readBinToEnd [Monad m] [MonadLiftT IO m] (h : IO.FS.Stream) : m ByteArray := do

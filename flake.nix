@@ -15,30 +15,31 @@
   inputs.assrt-command.url = github:pnwamk/lean4-assert-command;
   inputs.assrt-command.inputs.lean.follows = "lean";
 
-  outputs = { self, lean, flake-utils, leanproto, assrt-command, nixpkgs, leanShell, nix}: flake-utils.lib.eachDefaultSystem (system:
+  outputs = { self, lean, flake-utils, leanproto, assrt-command, nixpkgs, leanShell, nix }: flake-utils.lib.eachDefaultSystem (system:
     let
       pkgs = import nixpkgs {
         inherit system;
       };
       leanPkgs = lean.packages.${system};
       pkg = leanPkgs.buildLeanPackage {
-        name = "LeanProtocPlugin";  # must match the name of the top-level .lean file
+        name = "LeanProtocPlugin"; # must match the name of the top-level .lean file
         src = ./.;
-        deps = [leanproto.packages.${system} assrt-command.packages.${system}];
+        deps = [ leanproto.packages.${system} assrt-command.packages.${system} ];
         # pluginDeps = [leanproto-native.packages.${system}.sharedLib];
       };
 
-      
 
-      leanProtoPackageLib = import ./leanProtoPackage.nix { inherit pkgs system leanPkgs leanproto; generator = pkg; };      
-      runGeneratorPkg = (pkgs.lib.traceValSeqN 2 leanProtoPackageLib).leanProtoPackage ["${pkg.src}/proto/google/protobuf/descriptor.proto" "${pkg.src}/proto/google/protobuf/compiler/plugin.proto"] 
+
+      leanProtoPackageLib = import ./leanProtoPackage.nix { inherit pkgs system leanPkgs leanproto; generator = pkg; };
+      runGeneratorPkg = (pkgs.lib.traceValSeqN 2 leanProtoPackageLib).leanProtoPackage [ "${pkg.src}/proto/google/protobuf/descriptor.proto" "${pkg.src}/proto/google/protobuf/compiler/plugin.proto" ]
         "${pkg.src}/proto" "Generated";
 
-    in {
+    in
+    {
       packages = pkg // {
         inherit (leanPkgs) lean;
 
-        runGenerator = leanProtoPackageLib.runGenerator ["${pkg.src}/proto/google/protobuf/descriptor.proto" "${pkg.src}/proto/google/protobuf/compiler/plugin.proto"] 
+        runGenerator = leanProtoPackageLib.runGenerator [ "${pkg.src}/proto/google/protobuf/descriptor.proto" "${pkg.src}/proto/google/protobuf/compiler/plugin.proto" ]
           "${pkg.src}/proto" "Generated";
         print-lean-deps = leanPkgs.print-lean-deps;
         pkgMR = runGeneratorPkg.modRoot;
@@ -47,7 +48,7 @@
 
       defaultPackage = pkg.modRoot;
 
-      devShell = import leanShell { inherit pkgs leanPkgs; nix = leanPkgs.nix; leanPkg = pkg; };
+      devShell = (import leanShell { inherit pkgs leanPkgs; nix = leanPkgs.nix; leanPkg = pkg; }).shell;
     });
 }
 

@@ -85,7 +85,7 @@
       defaultPackage = pkg.modRoot;
 
 
-      devShell = import leanShell { inherit pkgs leanPkgs; nix = leanPkgs.nix; leanPkg = pkg; };
+      devShell = (import leanShell { inherit pkgs leanPkgs; nix = leanPkgs.nix; leanPkg = pkg; }).shell;
     });
 }
 

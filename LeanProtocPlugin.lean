@@ -32,6 +32,8 @@ def defaultImports (sourceFilename: String) : Array String := #[
 
 def defaultSettings : Array String := #[
   "set_option maxHeartbeats 10000000",
+  "set_option maxRecDepth 2048",
+  "set_option synthInstance.maxHeartbeats 10000000",
   "set_option genSizeOfSpec false",
   "",
   "open Std (AssocList)"
@@ -71,11 +73,11 @@ def prepareContextRecurseFile (d: ASTPath) (_: Unit): StateM ContextPrepState Un
 
 def prepareContext (r: compiler.CodeGeneratorRequest) (rootPackage: String): ContextPrepState :=   
   let rec doWork (f: FileDescriptorProto) : StateM ContextPrepState PUnit := do
-    recurseM ((ASTPath.init f rootPackage), ()) (wrapRecurseFn prepareContextRecurseFile)
+    recurseM ((ASTPath.init f rootPackage), ()) (wrapRecurseFn prepareContextRecurseFile true)
   let doWorkM := r.protoFile.forM $ doWork
   StateT.run doWorkM {} |> Id.run |> Prod.snd
 
-def doWork (file: FileDescriptorProto) : ProtoGenM CodeGeneratorResponse_File := do
+def doWork (file: FileDescriptorProto) : ProtoGenM $ List CodeGeneratorResponse_File := do
   addLines $ defaultImports file.name.get!
   addImportDeps file
   addLine ""
@@ -93,6 +95,8 @@ def doWork (file: FileDescriptorProto) : ProtoGenM CodeGeneratorResponse_File :=
   addLines #["", "end", ""]
 
   generateMessageManualDerives file
+  addLine ""
+  generateLeanDeriveStatements file
 
   addLines #["", "mutual", ""]
   generateDeserializers file
@@ -107,7 +111,7 @@ def doWork (file: FileDescriptorProto) : ProtoGenM CodeGeneratorResponse_File :=
   addLine ""
   addLine s!"end {package}"
 
-  return CodeGeneratorResponse_File.mk (outputFilePath file (← read).namespacePrefix) none ("\n".intercalate (← get).lines.toList) none
+  return [CodeGeneratorResponse_File.mk (outputFilePath file (← read).namespacePrefix) none ("\n".intercalate (← get).lines.toList) none]
 
 def main(argv: List String): IO UInt32 := do
   let i ← IO.getStdin
@@ -132,11 +136,12 @@ def main(argv: List String): IO UInt32 := do
     (rbmapOfC contextAux.oneofs)
     (rbmapOfC contextAux.messages)
 
-  let processFile (f: FileDescriptorProto) : IO CodeGeneratorResponse_File :=
+  let processFile (f: FileDescriptorProto) : IO $ List CodeGeneratorResponse_File :=
     StateT.run' (ReaderT.run (doWork f) (ctxForFile f)) {}  
 
   let response : CodeGeneratorResponse ← do try
-    let mut processed : Array CodeGeneratorResponse_File ← fileProtosToWrite.mapM processFile
+    let processedNested : Array $ List CodeGeneratorResponse_File ← fileProtosToWrite.mapM processFile
+    let mut processed := processedNested.foldl (fun acc curr => acc ++ curr.toArray) #[]
 
     let allNewModules := filesToWrite.fold (fun acc s => (namespacePrefix ++ "." ++ filePathToPackage s) :: acc) []
     let rootFileText := "\n".intercalate $ allNewModules.map (s!"import {·}")  

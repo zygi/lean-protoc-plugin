@@ -10,8 +10,8 @@ open google.protobuf.compiler
 open google.protobuf
 
 def enumDerivingList := ["Repr", "Inhabited", "BEq"]
-def oneofDerivingList := ["InhabitedMut", "BEq"]
-def messageDerivingList := ["InhabitedMut", "BEq"]
+-- def messageDerivingList := ["InhabitedMut", "BEq"]
+def messageDerivingList := ["Repr", "InhabitedMut", "BEq"]
 
 
 def outputFilePath (f: FileDescriptorProto) (root: String) : String := do
@@ -159,8 +159,8 @@ def fullDeserFunctionInline(fd: FieldDescriptorProto) (wiretypeVarName: String) 
     return s!"(LeanProto.EncDec.decodeMapEntry ({k} arbitrary) ({v} arbitrary))"
   | none => do
     let v ← bareDeserFunctionInline fd
-    if fd.label.getD FieldDescriptorProto_Label.LABEL_OPTIONAL == FieldDescriptorProto_Label.LABEL_REPEATED then
-      if isPacked fd then
+    if isRepeated fd then
+      if isPackable fd then
         return s!"(LeanProto.EncDec.decodeKeyAndMixedArray ({v} arbitrary) {wiretypeVarName})"
       else
         return s!"(LeanProto.EncDec.decodeKeyAndNonPackedArray ({v} arbitrary) {wiretypeVarName})"
@@ -221,7 +221,7 @@ def wireTypeForField (fd: FieldDescriptorProto) : Nat := do
   return wt.toNat
 end 
 
-def fullSerFunctionInline(fd: FieldDescriptorProto) (wiretypeVarName: String) : ProtoGenM String := do
+def fullSerFunctionInline(fd: FieldDescriptorProto) (insideOneof: Bool) (wiretypeVarName: String) : ProtoGenM String := do
   let number := fd.number.get!
   match (← fieldMapFields fd) with
   | some (k, v) => do
@@ -238,8 +238,10 @@ def fullSerFunctionInline(fd: FieldDescriptorProto) (wiretypeVarName: String) : 
         return s!"(LeanProto.EncDec.encodeIfNonempty (LeanProto.EncDec.encodeWithTag (LeanProto.EncDec.encodePackedArray ({v})) {wt} rfl {number}))"
       else
         return s!"(LeanProto.EncDec.encodeUnpackedArrayWithTag ({v}) {wt} rfl {number})"
-    else
+    else if fd.type.getI == FieldDescriptorProto_Type.TYPE_MESSAGE || insideOneof then
       return s!"LeanProto.EncDec.encodeOpt (LeanProto.EncDec.encodeWithTag ({v}) {wt} rfl {number})"
+    else
+      return s!"LeanProto.EncDec.encodeOptNotMsg (LeanProto.EncDec.encodeWithTag ({v}) {wt} rfl {number})"
 
 
 inductive LogicalField where
@@ -319,9 +321,6 @@ def generateOneofDeclaration (l: LogicalField) (baseLeanName: String): ProtoGenM
   for v in fields do
     let type ← fullFieldTypeName v
     addLine s!"| {fieldNameToLean v.name.get!} : {type} -> {baseLeanName}"
-
-  let derives := ", ".intercalate oneofDerivingList
-  addLine s!"deriving {derives}"
   addLine ""
 
 def generateMessageDeclaration (p: ASTPath): ProtoGenM Unit := do
@@ -354,15 +353,39 @@ def generateMessageDeclaration (p: ASTPath): ProtoGenM Unit := do
       let type ← fullFieldTypeName f
       addLine s!"  ({fieldNameToLean f.name.get!} : {type})"
   addLine s!"  : {← messageFullLeanPath p}"
-
-  let derives := ", ".intercalate messageDerivingList
-  addLine s!"deriving {derives}"
   addLine ""
 
 def generateMessageDeclarations (fd: FileDescriptorProto) : ProtoGenM Unit := do
   let rec processMessage (d: ASTPath) (_: Unit) : ProtoGenM Unit := generateMessageDeclaration d  
   recurseM (← ASTPath.initM fd, ()) (wrapRecurseFn processMessage)
 
+def generateLeanDeriveStatements (fd: FileDescriptorProto) : ProtoGenM Unit := do
+  -- First, traverse the tree and build up a list of all typenames of msgs and oneofs
+  let WithListState := StateT (List String) ProtoGenM
+  let doOne (p: ASTPath): WithListState Unit := do
+    match p.revMessages.head? with
+    | none => return
+    | some m => do
+    let logFields := getLogicalFields m
+    let mut state := [(← messageFullLeanPath p)]
+
+    for lf in logFields do 
+      match lf with
+      | LogicalField.oneof f o _ => state := (← oneofFullLeanPath (p, o)) :: state 
+      | LogicalField.normal f => ()
+    
+    set (state ++ (← get))
+
+
+  -- Run the first state monad to get the list
+  let initPath ← ASTPath.initM fd
+  let m := recurseM (μ := WithListState) (initPath, ()) (wrapRecurseFn (fun x _ => doOne x))
+  let ⟨ r, s ⟩  ← StateT.run m []
+  
+  let derives := ", ".intercalate messageDerivingList
+  let idents := ", ".intercalate s
+  addLine s!"deriving instance {derives} for {idents}"
+  r
 
 -- TODO: rewrite as proper Lean derives
 def generateMessageManualDerives (fd: FileDescriptorProto) : ProtoGenM Unit := do
@@ -390,9 +413,9 @@ def generateMessageManualDerives (fd: FileDescriptorProto) : ProtoGenM Unit := d
       addLine s!"| mk{captureVars} => v{i}"
 
       -- Getter or default
-      if !isOneof && origField.isSingular then
-        addLine s!"def {messageTypeName}.{fieldName}! : {messageTypeName} → {← outputTypeName}"
-        addLine s!"| mk{captureVars} => v{i}.getD arbitrary"
+      -- if !isOneof && origField.isSingular then
+      --   addLine s!"def {messageTypeName}.{fieldName}! : {messageTypeName} → {← outputTypeName}"
+      --   addLine s!"| mk{captureVars} => v{i}.getD arbitrary"
       
       -- Setter
       addLine s!"def {messageTypeName}.set_{fieldName} (orig: {messageTypeName}) (val: {← outputTypeName})"
@@ -487,10 +510,10 @@ def generateSerializers (fd: FileDescriptorProto) : ProtoGenM Unit := do
         let oneofTypeName ← oneofFullLeanPath (p, o)
         for f in fs do
           let oneofVariantName := fieldNameToLean f.name.get!
-          let serFnInline ← fullSerFunctionInline f "_type"
+          let serFnInline ← fullSerFunctionInline f true "_type"
           addLine s!"    | {oneofTypeName}.{oneofVariantName} indVal => {serFnInline} {resVarName} indVal"
       | LogicalField.normal f =>
-        let serFnInline ← fullSerFunctionInline f "_type"
+        let serFnInline ← fullSerFunctionInline f false "_type"
         addLine s!"  {resVarName} := {serFnInline} {resVarName} v{idx}"
 
     addLine s!"  return {resVarName}"

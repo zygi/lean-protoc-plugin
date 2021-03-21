@@ -80,9 +80,13 @@ partial def recurseM [Monad μ] (curr: α) (action: α -> μ (List α)) : μ PUn
   let children ← action curr
   children.forM fun nested => recurseM nested action
 
-def wrapRecurseFn [Monad μ] (fn: ASTPath -> σ -> μ σ) (new: (ASTPath × σ)) : μ (List (ASTPath × σ)) := do
+def isMapEntry (d: DescriptorProto) := (DescriptorProto.options d).getI.mapEntry != some true
+
+def wrapRecurseFn [Monad μ] (fn: ASTPath -> σ -> μ σ) (withMaps := false) (new: (ASTPath × σ)) : μ (List (ASTPath × σ)) := do
     let r ← fn new.fst new.snd;
     let children := match new.fst.revMessages.head? with
-      | some m => m.nestedType.toList
+      | some m => 
+        let nested := if withMaps then m.nestedType else m.nestedType.filter isMapEntry
+        nested.toList
       | none => new.fst.file.messageType.toList
     return children.map (fun v => (new.fst.addMessage v, r))

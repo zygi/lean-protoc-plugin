@@ -8,6 +8,15 @@ open ConformanceProto.ProtobufTestMessages.Proto3
 open LeanProto.ProtoSerialize
 open LeanProto.ProtoDeserialize
 
+def req := LeanProto.Utils.hexToByteArray! "188080808020"
+def dec : TestAllTypesProto3 := match deserialize (α := TestAllTypesProto3) req with | Except.ok x => x | _ => panic! "ASdf"
+
+#eval decide $ dec.optionalUint32.get! < UInt32.size
+#eval decide $ 8589934592 < UInt32.size
+
+#eval serialize dec
+
+
 def decodeToIO (x: EStateM.Result IO.Error σ α) : IO α := match x with
   | EStateM.Result.ok v _ => v
   | EStateM.Result.error e _ => throw e
@@ -19,6 +28,7 @@ def decodeExToIO (x: Except IO.Error α) : IO α := match x with
 def mkParseError (x: String) := ConformanceResponse.mk $ ConformanceResponse_ResultOneof.parseError x
 def mkSkipped (x: String) := ConformanceResponse.mk $ ConformanceResponse_ResultOneof.skipped x
 def mkSerializeError (x: String) := ConformanceResponse.mk $ ConformanceResponse_ResultOneof.serializeError x
+def mkRuntimeError (x: String) := ConformanceResponse.mk $ ConformanceResponse_ResultOneof.runtimeError x
 
 def doWork (i: ConformanceRequest) : IO ConformanceResponse := do
   let mt := i.messageType
@@ -43,14 +53,18 @@ def doWork (i: ConformanceRequest) : IO ConformanceResponse := do
       decodeExToIO $ deserialize payload (α := TestAllTypesProto3)
     catch e =>
       return mkParseError s!"{e}"
-       
   
-  try
-    let res ← serialize inp
-    pure $ ConformanceResponse.mk
-      (ConformanceResponse_ResultOneof.protobufPayload res)
+  let res ← try
+    serialize inp
   catch e =>
     return mkSerializeError s!"Serialize error {e}"
+
+  -- Not part of the conformance test but check that ser ∘ deser ≈ id
+  -- if (inp != (← decodeExToIO $ deserialize res (α := TestAllTypesProto3))) then
+  --   return mkRuntimeError s!"Runtime error, received request \"{LeanProto.Utils.byteArrayToHex payload}\", decoded: \"{LeanProto.Utils.byteArrayToHex res}\""    
+
+  pure $ ConformanceResponse.mk
+    (ConformanceResponse_ResultOneof.protobufPayload res)
   
 partial def Loop (i o: IO.FS.Stream) : IO Unit := do
   -- IO.eprintln "Starting iteration"

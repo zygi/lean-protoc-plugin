@@ -14,8 +14,13 @@ def enumDerivingList := ["Repr", "Inhabited", "BEq"]
 def messageDerivingList := ["Repr", "InhabitedMut", "BEq"]
 
 
-def outputFilePath (f: FileDescriptorProto) (root: String) : String := do
-  root ++ "/" ++ protoFilePathToLeanFilePath f.name.get! 
+def outputFilePath (fd: FileDescriptorProto) (root: String) : String := do
+  let f := filePathPartsToLeanPackageParts $ fd.name.get!.stripFileEnding.splitOn "/"
+  root ++ "/" ++ ("/".intercalate f) ++ ".lean"
+
+def grpcOutputFilePath (fd: FileDescriptorProto) (root: String) : String := do
+  let f := filePathPartsToLeanPackageParts $ fd.name.get!.stripFileEnding.splitOn "/"
+  root ++ "/" ++ ("/".intercalate f) ++ "GRPC.lean"
 
 def messageFullLeanPath (t: ASTPath) : ProtoGenM String := do
   if t.file.name == (← read).currentFile.name then 
@@ -543,3 +548,46 @@ def generateSerDeserInstances (fd: FileDescriptorProto) : ProtoGenM Unit := do
 
 
   recurseM (← ASTPath.initM fd, ()) (wrapRecurseFn (fun d _ => doOne d))
+
+
+def generateGRPC (fd: FileDescriptorProto) : ProtoGenM Unit := do
+  let getEndpointInfo (md: MethodDescriptorProto) (grpcPrefix: String): ProtoGenM (String × String) := do
+    let inputTypeOpt ← ctxFindMessage md.inputType.get!
+    let inputType ← messageFullLeanPath inputTypeOpt.get!
+    let outputTypeOpt ← ctxFindMessage md.outputType.get!
+    let outputType ← messageFullLeanPath outputTypeOpt.get!
+
+    let grpcName := grpcPrefix ++ md.name.get!
+    let fieldName := protoEndpointNameToLean md.name.get!
+
+    let (actionType, inductiveVariant) := match (md.clientStreaming.getI, md.serverStreaming.getI) with
+    | (false, false) => ("LeanGRPC.ServerUnaryHandler", "unaryHandler")
+    | (false, true) => ("LeanGRPC.ServerServerStreamingHandler", "serverStreamingHandler")
+    | (true, false) => ("LeanGRPC.ServerClientStreamingHandler", "clientStreamingHandler")
+    | (true, true) => ("LeanGRPC.ServerBiDiStreamingHandler", "biDiStreamingHandler")
+
+    let field := s!"  {fieldName} : {actionType} σ {inputType} {outputType}"
+    let handler := s!"    (\"{grpcName}\", LeanGRPC.ServerHandler.mk _ inferInstance _ inferInstance true (LeanGRPC.ServerHandlerAction.{inductiveVariant} {fieldName}))"
+    return (field, handler)
+
+  let generateService (sd: ServiceDescriptorProto) : ProtoGenM Unit := do
+    let grpcPrefix := "/" ++ fd.package.get! ++ "/"    
+    let endpointInfo ← sd.method.mapM (getEndpointInfo · grpcPrefix)
+    let className := protoServiceNameToLean sd.name.get!
+
+    addLine s!"class {className} (σ) extends LeanGRPC.Service σ where"
+    for ⟨field, _⟩ in endpointInfo do addLine field
+
+    addLine s!"  handlers_ := Std.rbmapOf ["
+    let lines ← endpointInfo.mapM (fun ⟨_, entry⟩ => entry)
+    addLine $ ",\n".intercalate lines.toList
+    addLine s!"  ] (fun a b => a < b)"
+    addLine ""
+
+  let _ ← fd.service.mapM generateService
+  
+
+    
+    
+
+    

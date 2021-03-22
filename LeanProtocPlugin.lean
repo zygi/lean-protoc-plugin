@@ -111,7 +111,29 @@ def doWork (file: FileDescriptorProto) : ProtoGenM $ List CodeGeneratorResponse_
   addLine ""
   addLine s!"end {package}"
 
-  return [CodeGeneratorResponse_File.mk (outputFilePath file (← read).namespacePrefix) none ("\n".intercalate (← get).lines.toList) none]
+  let protoFile := CodeGeneratorResponse_File.mk (outputFilePath file (← read).namespacePrefix) none ("\n".intercalate (← get).lines.toList) none
+
+  let services := file.service
+  if services.size == 0 then return [protoFile]
+
+  -- Reset line state
+  set { (← get) with lines := #[] }
+  
+  addLines $ defaultImports file.name.get!
+  addImportDeps file
+
+  let protoMod := (← read).namespacePrefix ++ "." ++ filePathToPackage file.name.get!
+  addLine s!"import LeanGRPC"
+  addLine s!"import {protoMod}"
+  addLine ""
+  addLine s!"namespace {package}"
+  addLine ""
+  generateGRPC file
+  addLine ""
+  addLine s!"end {package}"
+  let grpcFile := CodeGeneratorResponse_File.mk (grpcOutputFilePath file (← read).namespacePrefix) none ("\n".intercalate (← get).lines.toList) none
+
+  return [protoFile, grpcFile]
 
 def main(argv: List String): IO UInt32 := do
   let i ← IO.getStdin
@@ -143,7 +165,7 @@ def main(argv: List String): IO UInt32 := do
     let processedNested : Array $ List CodeGeneratorResponse_File ← fileProtosToWrite.mapM processFile
     let mut processed := processedNested.foldl (fun acc curr => acc ++ curr.toArray) #[]
 
-    let allNewModules := filesToWrite.fold (fun acc s => (namespacePrefix ++ "." ++ filePathToPackage s) :: acc) []
+    let allNewModules := processed.foldl (fun acc s => (filePathToPackage s.name.get!) :: acc) []
     let rootFileText := "\n".intercalate $ allNewModules.map (s!"import {·}")  
     processed := processed.push $ CodeGeneratorResponse_File.mk (some $ namespacePrefix ++ ".lean") none (some rootFileText) none
 

@@ -46,6 +46,8 @@ def fileTopNameToLean (s: String) := (s.toCamelCase true)
 def protoMessageNameToLean (s: String) := (s.toCamelCase true)
 def protoEnumNameToLean (s: String) := (s.toCamelCase true)
 def protoOneofNameToLean (s: String) := (s.toCamelCase true) ++ "Oneof"
+def protoEndpointNameToLean (s: String) := (s.toCamelCase true)
+def protoServiceNameToLean (s: String) := (s.toCamelCase false) ++ "Service"
 
 def reservedNames := rbtreeOfC #["syntax", "begin", "end", "structure", "inductive", "class", "where"]
 
@@ -63,10 +65,6 @@ def filePathPartsToLeanPackageParts (x: List String) :=
 def filePathToPackage (s: String) : String := do
   let f := filePathPartsToLeanPackageParts $ s.stripFileEnding.splitOn "/"
   ".".intercalate f
-
-def protoFilePathToLeanFilePath (s: String) : String := do
-  let f := filePathPartsToLeanPackageParts $ s.stripFileEnding.splitOn "/"
-  ("/".intercalate f) ++ ".lean"
 
 #assert (filePathToPackage "google/protobuf/compiler/plugin.proto") == "Google.Protobuf.Compiler.Plugin"
 

@@ -10,8 +10,8 @@ open google.protobuf.compiler
 open google.protobuf
 
 def enumDerivingList := ["Repr", "Inhabited", "BEq"]
--- def messageDerivingList := ["InhabitedMut", "BEq"]
-def messageDerivingList := ["Repr", "InhabitedMut", "BEq"]
+def messageDerivingList := ["InhabitedMut", "BEq"]
+-- def messageDerivingList := ["Repr", "InhabitedMut", "BEq"]
 
 
 def outputFilePath (fd: FileDescriptorProto) (root: String) : String := do
@@ -55,6 +55,10 @@ namespace google.protobuf
 def FieldDescriptorProto.isSingular(fd: FieldDescriptorProto) :=
   fd.label == some FieldDescriptorProto_Label.LABEL_OPTIONAL || 
   fd.label == some FieldDescriptorProto_Label.LABEL_REQUIRED
+
+def FieldDescriptorProto.isMessage(fd: FieldDescriptorProto) :=
+ fd.type.get! ==  FieldDescriptorProto_Type.TYPE_MESSAGE
+
 end google.protobuf
 
 -- Field types
@@ -101,9 +105,10 @@ def fullFieldTypeName(fd: FieldDescriptorProto) : ProtoGenM String := do
     let v ← bareFieldTypeName fd
     if fd.label.getD FieldDescriptorProto_Label.LABEL_OPTIONAL == FieldDescriptorProto_Label.LABEL_REPEATED then
       return s!"(Array ({v}))"
-    else
+    else if fd.isMessage then
       return s!"(Option ({v}))"
-
+    else
+      return s!"({v})"
 
 -- Deserialization functions
 
@@ -243,10 +248,10 @@ def fullSerFunctionInline(fd: FieldDescriptorProto) (insideOneof: Bool) (wiretyp
         return s!"(LeanProto.EncDec.encodeIfNonempty (LeanProto.EncDec.encodeWithTag (LeanProto.EncDec.encodePackedArray ({v})) {wt} rfl {number}))"
       else
         return s!"(LeanProto.EncDec.encodeUnpackedArrayWithTag ({v}) {wt} rfl {number})"
-    else if fd.type.getI == FieldDescriptorProto_Type.TYPE_MESSAGE || insideOneof then
+    else if fd.isMessage || insideOneof then
       return s!"LeanProto.EncDec.encodeOpt (LeanProto.EncDec.encodeWithTag ({v}) {wt} rfl {number})"
     else
-      return s!"LeanProto.EncDec.encodeOptNotMsg (LeanProto.EncDec.encodeWithTag ({v}) {wt} rfl {number})"
+      return s!"LeanProto.EncDec.encodeSkipDefault (LeanProto.EncDec.encodeWithTag ({v}) {wt} rfl {number})"
 
 
 inductive LogicalField where
@@ -352,7 +357,7 @@ def generateMessageDeclaration (p: ASTPath): ProtoGenM Unit := do
     match lf with
     | LogicalField.oneof f o _ => do
       let type ← oneofFullLeanPath (p, o)
-      addLine s!"  ({fieldNameToLean o.name.get!} : {type})"
+      addLine s!"  ({fieldNameToLean o.name.get!} : Option {type})"
     | LogicalField.normal f => do
       -- IO.eprintln s!"{f.name}"
       let type ← fullFieldTypeName f
@@ -406,7 +411,7 @@ def generateMessageManualDerives (fd: FileDescriptorProto) : ProtoGenM Unit := d
     for i in [:logFields.length] do
       let lf := logFields.get! i
       let (outputTypeName, origField, fieldName, isOneof) := match lf with
-      | LogicalField.oneof f o _ => (oneofFullLeanPath (p, o), f, fieldNameToLean o.name.get!, true)
+      | LogicalField.oneof f o _ => ((s!"(Option {·})") <$> oneofFullLeanPath (p, o), f, fieldNameToLean o.name.get!, true)
       | LogicalField.normal f => (fullFieldTypeName f, f, fieldNameToLean f.name.get!, false)
 
       let mut captureVars := ""
@@ -416,11 +421,6 @@ def generateMessageManualDerives (fd: FileDescriptorProto) : ProtoGenM Unit := d
       -- Getter
       addLine s!"def {messageTypeName}.{fieldName} : {messageTypeName} → {← outputTypeName}"
       addLine s!"| mk{captureVars} => v{i}"
-
-      -- Getter or default
-      -- if !isOneof && origField.isSingular then
-      --   addLine s!"def {messageTypeName}.{fieldName}! : {messageTypeName} → {← outputTypeName}"
-      --   addLine s!"| mk{captureVars} => v{i}.getD arbitrary"
       
       -- Setter
       addLine s!"def {messageTypeName}.set_{fieldName} (orig: {messageTypeName}) (val: {← outputTypeName})"
@@ -451,8 +451,8 @@ def generateDeserializers (fd: FileDescriptorProto) : ProtoGenM Unit := do
       let oneofVariantName := fieldNameToLean f.name.get!
       let fieldName := fieldNameToLean o.name.get!
       let desFn ← fullDeserFunctionInline f "_type"
-      let unwrapSuffix := if f.isSingular then ".getD arbitrary" else ""
-      let newValue := s!"({oneofTypeName}.{oneofVariantName} (← {desFn} (match {currentVarName}.{fieldName} with | {oneofTypeName}.{oneofVariantName} q => q{unwrapSuffix} | _ => arbitrary )))"
+      let unwrapSuffix := if f.isSingular && f.isMessage then ".getD arbitrary" else ""
+      let newValue := s!"(some ({oneofTypeName}.{oneofVariantName} (← {desFn} (match {currentVarName}.{fieldName} with | some ({oneofTypeName}.{oneofVariantName} q) => q{unwrapSuffix} | _ => arbitrary ))))"
       let number := f.number.get!
       addLine s!"| {number} => do {messageDeserFunctionName} ({currentVarName}.set_{fieldName} {newValue})"
 
@@ -460,7 +460,7 @@ def generateDeserializers (fd: FileDescriptorProto) : ProtoGenM Unit := do
       let fieldName := fieldNameToLean f.name.get!
       let desFn ← fullDeserFunctionInline f "_type"
       let number := f.number.get!
-      let unwrapSuffix := if f.isSingular then ".getD arbitrary" else ""
+      let unwrapSuffix := if f.isSingular && f.isMessage then ".getD arbitrary" else ""
       match (← fieldMapFields f) with
       | some _ => do
         let newValue := s!"(({currentVarName}.{fieldName}.erase newPair.fst).insert newPair.fst newPair.snd)"
@@ -511,12 +511,13 @@ def generateSerializers (fd: FileDescriptorProto) : ProtoGenM Unit := do
       let lf := logFields.get! idx
       match lf with
       | LogicalField.oneof _ o fs =>
-        addLine s!"  res := match v{idx} with"
+        addLine s!"  {resVarName} := match v{idx} with"
         let oneofTypeName ← oneofFullLeanPath (p, o)
         for f in fs do
           let oneofVariantName := fieldNameToLean f.name.get!
           let serFnInline ← fullSerFunctionInline f true "_type"
-          addLine s!"    | {oneofTypeName}.{oneofVariantName} indVal => {serFnInline} {resVarName} indVal"
+          addLine s!"    | some ({oneofTypeName}.{oneofVariantName} indVal) => {serFnInline} {resVarName} indVal"
+        addLine s!"    | none => {resVarName}"
       | LogicalField.normal f =>
         let serFnInline ← fullSerFunctionInline f false "_type"
         addLine s!"  {resVarName} := {serFnInline} {resVarName} v{idx}"
@@ -567,11 +568,11 @@ def generateGRPC (fd: FileDescriptorProto) : ProtoGenM Unit := do
     | (true, true) => ("LeanGRPC.ServerBiDiStreamingHandler", "biDiStreamingHandler")
 
     let field := s!"  {fieldName} : {actionType} σ {inputType} {outputType}"
-    let handler := s!"    (\"{grpcName}\", LeanGRPC.ServerHandler.mk _ inferInstance _ inferInstance true (LeanGRPC.ServerHandlerAction.{inductiveVariant} {fieldName}))"
+    let handler := s!"    (\"{grpcName}\", LeanGRPC.ServerHandler.mk _ inferInstance _ inferInstance (LeanGRPC.ServerHandlerAction.{inductiveVariant} {fieldName}))"
     return (field, handler)
 
   let generateService (sd: ServiceDescriptorProto) : ProtoGenM Unit := do
-    let grpcPrefix := "/" ++ fd.package.get! ++ "/"    
+    let grpcPrefix := "/" ++ fd.package.get! ++ "." ++ sd.name.get! ++ "/"    
     let endpointInfo ← sd.method.mapM (getEndpointInfo · grpcPrefix)
     let className := protoServiceNameToLean sd.name.get!
 

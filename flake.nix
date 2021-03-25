@@ -31,16 +31,20 @@
 
 
       leanProtoPackageLib = import ./leanProtoPackage.nix { inherit pkgs system leanPkgs leanproto; generator = pkg; };
-      runGeneratorPkg = (pkgs.lib.traceValSeqN 2 leanProtoPackageLib).leanProtoPackage [ "${pkg.src}/proto/google/protobuf/descriptor.proto" "${pkg.src}/proto/google/protobuf/compiler/plugin.proto" ]
-        "${pkg.src}/proto" "Generated";
-
+      runGeneratorPkg = (pkgs.lib.traceValSeqN 2 leanProtoPackageLib).leanProtoPackage 
+        {inpPathsStrList = [ "${pkg.src}/proto/google/protobuf/descriptor.proto" "${pkg.src}/proto/google/protobuf/compiler/plugin.proto" ];
+         inpRootStr = "${pkg.src}/proto"; 
+         rootPackageNameStr = "Generated";
+        };
     in
     {
       packages = pkg // {
         inherit (leanPkgs) lean;
 
-        runGenerator = leanProtoPackageLib.runGenerator [ "${pkg.src}/proto/google/protobuf/descriptor.proto" "${pkg.src}/proto/google/protobuf/compiler/plugin.proto" ]
-          "${pkg.src}/proto" "Generated";
+        runGenerator = leanProtoPackageLib.runGenerator {inpPathsStrList = [ "${pkg.src}/proto/google/protobuf/descriptor.proto" "${pkg.src}/proto/google/protobuf/compiler/plugin.proto" ];
+         inpRootStr = "${pkg.src}/proto"; 
+         rootPackageNameStr = "Generated";
+        };
         print-lean-deps = leanPkgs.print-lean-deps;
         pkgMR = runGeneratorPkg.modRoot;
         pb = pkgs.protobuf;

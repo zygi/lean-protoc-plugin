@@ -25,25 +25,20 @@
       leanProtoPackageLib = import "${leanprotocplugin}/leanProtoPackage.nix"
         { inherit pkgs system leanPkgs leanproto; generator = leanprotocplugin.packages.${system}; };  
       src = ./proto;    
-      conformanceProtoPkg = leanProtoPackageLib.leanProtoPackage
-        ["${src}/google/protobuf/test_messages_proto3.proto"
-        "${src}/google/protobuf/any.proto"
-        "${src}/google/protobuf/duration.proto"
-        "${src}/google/protobuf/field_mask.proto"
-        "${src}/google/protobuf/struct.proto"
-        "${src}/google/protobuf/timestamp.proto"
-        "${src}/google/protobuf/wrappers.proto" "${src}/conformance.proto"] 
-        "${src}" "ConformanceProto";
 
-      confSrc = leanProtoPackageLib.runGenerator 
-        ["${src}/google/protobuf/test_messages_proto3.proto"
+      protoPkgParams = {
+        inpPathsStrList = ["${src}/google/protobuf/test_messages_proto3.proto"
         "${src}/google/protobuf/any.proto"
         "${src}/google/protobuf/duration.proto"
         "${src}/google/protobuf/field_mask.proto"
         "${src}/google/protobuf/struct.proto"
         "${src}/google/protobuf/timestamp.proto"
-        "${src}/google/protobuf/wrappers.proto" "${src}/conformance.proto"] 
-        "${src}" "ConformanceProto";
+        "${src}/google/protobuf/wrappers.proto" "${src}/conformance.proto"] ;
+         inpRootStr = "${src}"; 
+         rootPackageNameStr = "ConformanceProto";
+        };
+      conformanceProtoPkg = leanProtoPackageLib.leanProtoPackage protoPkgParams;
+      confSrc = leanProtoPackageLib.runGenerator protoPkgParams;         
 
       conformanceTestRunner = pkgs.lib.overrideDerivation pkgs.protobuf (params: {
         postBuild = ''

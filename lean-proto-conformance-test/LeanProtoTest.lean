@@ -8,15 +8,6 @@ open ConformanceProto.ProtobufTestMessages.Proto3
 open LeanProto.ProtoSerialize
 open LeanProto.ProtoDeserialize
 
-def req := LeanProto.Utils.hexToByteArray! "188080808020"
-def dec : TestAllTypesProto3 := match deserialize (α := TestAllTypesProto3) req with | Except.ok x => x | _ => panic! "ASdf"
-
-#eval decide $ dec.optionalUint32.get! < UInt32.size
-#eval decide $ 8589934592 < UInt32.size
-
-#eval serialize dec
-
-
 def decodeToIO (x: EStateM.Result IO.Error σ α) : IO α := match x with
   | EStateM.Result.ok v _ => v
   | EStateM.Result.error e _ => throw e
@@ -46,7 +37,7 @@ def doWork (i: ConformanceRequest) : IO ConformanceResponse := do
     return (mkSkipped s!"Unsupported output format")
     
   let payload ← do match i.payload with
-      | ConformanceRequest_PayloadOneof.protobufPayload (some x) => x
+      | ConformanceRequest_PayloadOneof.protobufPayload x => x
       | _ => return mkSkipped s!"Unsupported payload type"
 
   let inp : TestAllTypesProto3 ← do try

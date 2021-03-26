@@ -43,10 +43,11 @@
 
         runGenerator = leanProtoPackageLib.runGenerator {inpPathsStrList = [ "${pkg.src}/proto/google/protobuf/descriptor.proto" "${pkg.src}/proto/google/protobuf/compiler/plugin.proto" ];
          inpRootStr = "${pkg.src}/proto"; 
-         rootPackageNameStr = "Generated";
+         rootPackageNameStr = "LeanProtocPlugin";
         };
         print-lean-deps = leanPkgs.print-lean-deps;
         pkgMR = runGeneratorPkg.modRoot;
+        pkgC = runGeneratorPkg.cTree;
         pb = pkgs.protobuf;
       };
 

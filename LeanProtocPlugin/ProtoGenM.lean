@@ -1,11 +1,10 @@
 import Std.Data.RBMap
 import LeanProtocPlugin.Helpers
-import LeanProtocPlugin.google.protobuf.compiler.plugin
-import LeanProtocPlugin.google.protobuf.descriptor
+import LeanProtocPlugin.Google.Protobuf.Compiler.Plugin
+import LeanProtocPlugin.Google.Protobuf.Descriptor
 
-open google.protobuf.compiler
-open google.protobuf
-
+open LeanProtocPlugin.Google.Protobuf.Compiler
+open LeanProtocPlugin.Google.Protobuf
 
 
 structure ASTPath where
@@ -15,7 +14,7 @@ structure ASTPath where
   leanModule : String
   leanName : String
   protoFullPath : String
-  deriving Repr, Inhabited
+  deriving BEq, Inhabited
 
 structure ProtoGenContext where
   namespacePrefix : String
@@ -25,7 +24,6 @@ structure ProtoGenContext where
   enumDescriptorMap : Std.RBMapC String (ASTPath × EnumDescriptorProto)
   oneofDescriptorMap : Std.RBMapC String (ASTPath × OneofDescriptorProto)
   messageDescriptorMap : Std.RBMapC String ASTPath
-  deriving Repr
 
 structure ProtoGenState where
   lines : Array String := #[]
@@ -35,14 +33,6 @@ abbrev ProtoGenM := ReaderT ProtoGenContext $ StateT ProtoGenState $ IO
 def addLine (l: String) : ProtoGenM Unit := do let s ← get; set $ ProtoGenState.mk $ s.lines.push l
 def addLines (l: Array String) : ProtoGenM Unit := do let s ← get; set $ ProtoGenState.mk $ s.lines++l
 
-
-def EStateM.Result.unwrap (r: EStateM.Result IO.Error σ α) : IO α := match r with
-| Result.ok r _ => pure r
-| Result.error e _ => throw e
-
-def Except.unwrap (x: Except IO.Error α) : IO α := match x with
-  | Except.ok v => v
-  | Except.error e => throw e
 
 def Option.unwrap (x: Option α) : ProtoGenM α := match x with
   | some v => v
@@ -58,29 +48,27 @@ def ctxFindMessage (s: String) : ProtoGenM $ Option ASTPath := do
 def ASTPath.init (file: FileDescriptorProto) (rootPackage: String): ASTPath :=
   { file := file,
     revMessages := [],
-    leanModule := rootPackage ++ "." ++ protoPackageToLeanPackagePrefix file.package.get!,
+    leanModule := rootPackage ++ "." ++ protoPackageToLeanPackagePrefix file.package,
     leanName := "",
-    protoFullPath := "." ++ file.package.getI}
+    protoFullPath := "." ++ file.package}
 
 def ASTPath.initM (file: FileDescriptorProto): ProtoGenM ASTPath := do
   return ASTPath.init file (← read).namespacePrefix
 
 def ASTPath.addMessage (m: ASTPath) (m2 : DescriptorProto) : ASTPath :=
-  let newMessageName := protoMessageNameToLean m2.name.get!
+  let newMessageName := protoMessageNameToLean m2.name
   let newPathChunk := if m.leanName == "" then newMessageName else "_" ++ newMessageName
   { m with
     file := m.file,
     revMessages := m2 :: m.revMessages,
     leanName := m.leanName ++ newPathChunk,
-    protoFullPath := m.protoFullPath ++ "." ++ m2.name.get! }
+    protoFullPath := m.protoFullPath ++ "." ++ m2.name }
 
--- Careful around these -- unless I provide the full type params via @ I get
--- stack overflows
 partial def recurseM [Monad μ] (curr: α) (action: α -> μ (List α)) : μ PUnit := do
   let children ← action curr
   children.forM fun nested => recurseM nested action
 
-def isMapEntry (d: DescriptorProto) := (DescriptorProto.options d).getI.mapEntry != some true
+def isMapEntry (d: DescriptorProto) := ((DescriptorProto.options d).getD arbitrary).mapEntry == false
 
 def wrapRecurseFn [Monad μ] (fn: ASTPath -> σ -> μ σ) (withMaps := false) (new: (ASTPath × σ)) : μ (List (ASTPath × σ)) := do
     let r ← fn new.fst new.snd;

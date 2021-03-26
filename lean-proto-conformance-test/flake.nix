@@ -47,10 +47,9 @@
       });
 
       pkg = leanPkgs.buildLeanPackage {
-        name = "LeanProtoTest";  # must match the name of the top-level .lean file
+        name = "LeanProtoConformanceTest";  # must match the name of the top-level .lean file
         src = ./.;
         deps = [leanproto.packages.${system} lean.packages.${system}.Lean conformanceProtoPkg];
-        # pluginDeps = [leanproto-native.packages.${system}.sharedLib];
       };
 
       runConformanceTest = pkgs.stdenv.mkDerivation rec {
@@ -63,21 +62,15 @@
           # I still don't understand how nix infers shared libs :(
           LD_LIBRARY_PATH=${pkgs.protobuf}/lib ${conformanceTestRunner}/bin/conformance-test-runner \
             --failure_list ${if enforceRecommended then "--enforce_recommended " else ""}\
-            ./failing_tests.txt ${pkg.executable}/bin/leanprototest
+            ./failing_tests.txt ${pkg.executable}/bin/leanprotoconformancetest
         '';
       };
     in {
-      packages = pkg // {
-        inherit (leanPkgs) lean;
-        eee = conformanceProtoPkg.modRoot;
-        inherit confSrc;
-        # conf = confqq;
-        inherit conformanceTestRunner;
-        pb = pkgs.protobuf;
-        inherit runConformanceTest;
+      packages = {
+        inherit confSrc runConformanceTest;
       };
 
-      defaultPackage = pkg.modRoot;
+      defaultPackage = runConformanceTest;
 
 
       devShell = (import leanShell { inherit pkgs leanPkgs; nix = leanPkgs.nix; leanPkg = pkg; }).shell;

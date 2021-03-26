@@ -3,10 +3,8 @@ import Std.Data.RBTree
 import Std.Data.RBMap
 import Init.System.IO
 
-
-def Option.getI [Inhabited α] (x: Option α) : α := match x with
-  | some v => v
-  | none => arbitrary
+instance : MonadLift (Except ε) (EIO ε) :=
+  ⟨fun e => match e with | Except.ok r => pure r | Except.error e => fun s => EStateM.Result.error e s ⟩
 
 def String.toCamelCase (s: String) (firstCap : Bool) : String := do
   let mut newString := ""
@@ -36,9 +34,6 @@ def rbmapOfC [HasLess α] [(a b : α) → Decidable (a < b)] (a: Array (α × β
 abbrev Std.RBMapC (α β) [HasLess α] [(a b : α) → Decidable (a < b)] := Std.RBMap α β (fun x y => decide $ HasLess.Less x y)
 abbrev Std.RBTreeC (α) [HasLess α] [(a b : α) → Decidable (a < b)] := Std.RBTree α (fun x y => decide $ HasLess.Less x y)
 
-
--- def List.joinOn (x: List String) (sep: String) := x.foldl (fun r s => r ++ sep ++ s) sep
--- def Array.joinOn (x: Array String) (sep: String) := x.foldl (fun r s => r ++ sep ++ s) sep
 def String.stripFileEnding (s: String) := (s.dropRightWhile (· != '.')).dropRight 1
 
 def packageNamePieceToLean (s: String) := (s.toCamelCase true)

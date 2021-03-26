@@ -1,3 +1,7 @@
+// NOTE - THIS IS MODIFIED FOR LEAN-PROTOC-PLUGIN BY ADDING A DEFAULT
+// VALUE TO DescriptorProto.oneof_index AND FieldOptions.packed TO 
+// DISTINGUISH 0 FROM UNSET IN PROTO3 MODE.
+
 // Protocol Buffers - Google's data interchange format
 // Copyright 2008 Google Inc.  All rights reserved.
 // https://developers.google.com/protocol-buffers/
@@ -204,7 +208,7 @@ message FieldDescriptorProto {
 
   // If set, gives the index of a oneof in the containing type's oneof_decl
   // list.  This field is a member of that oneof.
-  optional int32 oneof_index = 9;
+  optional int32 oneof_index = 9 [default = -1];
 
   // JSON name of this field. The value is set by protocol compiler. If the
   // user has set a "json_name" option on this field, that option's value
@@ -549,7 +553,7 @@ message FieldOptions {
   // writing the tag and type for each element, the entire array is encoded as
   // a single length-delimited blob. In proto3, only explicit setting it to
   // false will avoid using packed encoding.
-  optional bool packed = 2;
+  optional bool packed = 2 [default = true];
 
   // The jstype option determines the JavaScript type used for values of the
   // field.  The option is permitted only for 64 bit integral and fixed types

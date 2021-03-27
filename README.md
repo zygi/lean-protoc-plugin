@@ -19,6 +19,14 @@ What doesn't work yet:
 - Well-known protos
 - Trying to serialize protos with Int fields holding values bigger than int64_t is UB 
 
+So far little attention has been paid to performance. It's not awful but there are a few low hanging
+fruit:
+- When deserializing, remove unnecessary ByteArray copies and replace them with SubByteArray when that's
+  in the stdlib (e.g. [here](https://github.com/zygi/lean-proto/blob/fe6dfe2ccc8c07c09b54dac21a672aea90b200c8/LeanProto.lean#L576))
+- Add native implementations of some bit-fiddling functions
+- Sprinkle some `inline` and `specialize` annotations
+- Change from `StateT` to `StateRefT`
+
 ### How to use
 Because LeanProto currently depends on some external native code, using it is only supported from Nix.
 This package exports Nix build rules that make it easy to package generated code:
@@ -82,15 +90,15 @@ For a full (though not super simple) example, see [the conformance test runner's
 
 The interfaces: 
 ```lean
-class ProtoEnum (α: Type u) where
+class LeanProto.ProtoEnum (α: Type u) where
   toInt : α -> Int
   ofInt : Int -> Option α
 
-class ProtoSerialize (α: Type u) where
+class LeanProto.ProtoSerialize (α: Type u) where
   serialize : α -> Except IO.Error ByteArray
   serializeToHex : α -> Except IO.Error String := fun a => Utils.byteArrayToHex <$> (serialize a)
 
-class ProtoDeserialize (α: Type u) where
+class LeanProto.ProtoDeserialize (α: Type u) where
   deserialize : ByteArray -> Except IO.Error α
   deserializeFromHex : String -> Except IO.Error α := fun x => do
     match Utils.hexToByteArray x with

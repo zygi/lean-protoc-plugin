@@ -7,10 +7,6 @@ open ConformanceProto.Conformance
 open ConformanceProto.ProtobufTestMessages.Proto3
 open LeanProto.ProtoSerialize
 open LeanProto.ProtoDeserialize
-  
-#eval match deserializeFromHex (α:=TestAllTypesProto3) "9a0318000102ffffffffffffffffff01ffffffffffffffffff0101" with
-  | Except.ok r => s!"{r.repeatedNestedEnum.size}"
-  | Except.error e => s!"{e}"
 
 instance : MonadLift (Except ε) (EIO ε) :=
   ⟨fun e => match e with | Except.ok r => pure r | Except.error e => fun s => EStateM.Result.error e s ⟩
@@ -64,12 +60,18 @@ def doWork (i: ConformanceRequest) : IO ConformanceResponse := do
     return mkRuntimeError s!"Runtime error {e}"
   
 partial def Loop (i o: IO.FS.Stream) : IO Unit := do
-  if (← i.isEof) then 
-    IO.eprintln "Got EOF"
+  if (← i.isEof) then
     return
 
   let sizeBytes ← i.read 4
+
+  if sizeBytes.size == 0 then
+    -- Empirically, the binary exists through this. But why? We should have been at Eof and should
+    -- have returned above.
+    return
+
   let size ← decodeToIO $ LeanProto.EncDec.parse sizeBytes LeanProto.EncDec.parseFixedUInt32
+  
   let bytes ← i.read size.toUSize
   let request ← deserialize (α:=ConformanceRequest) bytes
   let response ← doWork request

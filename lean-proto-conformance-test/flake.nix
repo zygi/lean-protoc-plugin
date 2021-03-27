@@ -1,21 +1,18 @@
 {
-  description = "LeanProto test";
+  description = "LeanProto conformance test";
 
   inputs.nixpkgs.url = github:NixOS/nixpkgs/nixpkgs-unstable;
 
-  inputs.lean.url = "path:../../lean4";
+  inputs.lean.url = github:leanprover/lean4;
   inputs.flake-utils.url = github:numtide/flake-utils;
-  
-  inputs.leanproto.url = "path:../../leanproto";
+
+  inputs.leanproto.url = github:zygi/lean-proto;
   inputs.leanproto.inputs.lean.follows = "lean";
 
   inputs.leanprotocplugin.url = "path:../";
   inputs.leanprotocplugin.inputs.lean.follows = "lean";
 
-  inputs.leanShell.url = "path:../../lean-nix-helpers/leanShell.nix";
-  inputs.leanShell.flake = false;
-
-  outputs = { self, lean, flake-utils, leanproto, leanShell, nixpkgs, leanprotocplugin}: flake-utils.lib.eachDefaultSystem (system:
+  outputs = { self, lean, flake-utils, leanproto, nixpkgs, leanprotocplugin }: flake-utils.lib.eachDefaultSystem (system:
     let
       pkgs = import nixpkgs {
         inherit system;
@@ -23,23 +20,27 @@
       leanPkgs = lean.packages.${system};
 
       leanProtoPackageLib = import "${leanprotocplugin}/leanProtoPackage.nix"
-        { inherit pkgs system leanPkgs leanproto; generator = leanprotocplugin.packages.${system}; };  
-      src = ./proto;    
+        { inherit pkgs system leanPkgs leanproto; generator = leanprotocplugin.packages.${system}; };
+      src = ./proto;
 
       protoPkgParams = {
-        inpPathsStrList = ["${src}/google/protobuf/test_messages_proto3.proto"
-        "${src}/google/protobuf/any.proto"
-        "${src}/google/protobuf/duration.proto"
-        "${src}/google/protobuf/field_mask.proto"
-        "${src}/google/protobuf/struct.proto"
-        "${src}/google/protobuf/timestamp.proto"
-        "${src}/google/protobuf/wrappers.proto" "${src}/conformance.proto"] ;
-         inpRootStr = "${src}"; 
-         rootPackageNameStr = "ConformanceProto";
-        };
+        inpPathsStrList = [
+          "${src}/google/protobuf/test_messages_proto3.proto"
+          "${src}/google/protobuf/any.proto"
+          "${src}/google/protobuf/duration.proto"
+          "${src}/google/protobuf/field_mask.proto"
+          "${src}/google/protobuf/struct.proto"
+          "${src}/google/protobuf/timestamp.proto"
+          "${src}/google/protobuf/wrappers.proto"
+          "${src}/conformance.proto"
+        ];
+        inpRootStr = "${src}";
+        rootPackageNameStr = "ConformanceProto";
+      };
       conformanceProtoPkg = leanProtoPackageLib.leanProtoPackage protoPkgParams;
-      confSrc = leanProtoPackageLib.runGenerator protoPkgParams;         
+      confSrc = leanProtoPackageLib.runGenerator protoPkgParams;
 
+      # Looks like the conformance test runner isn't in the default nix protobuf package
       conformanceTestRunner = pkgs.lib.overrideDerivation pkgs.protobuf (params: {
         postBuild = ''
           cd conformance && make test_cpp && cd .
@@ -47,33 +48,27 @@
       });
 
       pkg = leanPkgs.buildLeanPackage {
-        name = "LeanProtoConformanceTest";  # must match the name of the top-level .lean file
+        name = "LeanProtoConformanceTest"; # must match the name of the top-level .lean file
         src = ./.;
-        deps = [leanproto.packages.${system} lean.packages.${system}.Lean conformanceProtoPkg];
+        deps = [ leanproto.packages.${system} lean.packages.${system}.Lean conformanceProtoPkg ];
       };
 
-      runConformanceTest = pkgs.stdenv.mkDerivation rec {
-        inherit (system);
-        name = "run-conformance-test";
-        nativeBuildDeps = [pkgs.protobuf];
-        enforceRecommended = false;
-        buildCommand = ''
-          echo "Required.Proto3.ProtobufInput.UnknownVarint.ProtobufOutput" > ./failing_tests.txt
-          # I still don't understand how nix infers shared libs :(
+      runConformanceTest =
+        let enforceRecommended = true;
+        in
+        pkgs.writeShellScriptBin "runconformancetest" ''
           LD_LIBRARY_PATH=${pkgs.protobuf}/lib ${conformanceTestRunner}/bin/conformance-test-runner \
-            --failure_list ${if enforceRecommended then "--enforce_recommended " else ""}\
-            ./failing_tests.txt ${pkg.executable}/bin/leanprotoconformancetest
+              --failure_list ${./.}/failing_tests.txt \
+              ${if enforceRecommended then "--enforce_recommended " else ""}\
+              ${pkg.executable}/bin/leanprotoconformancetest
         '';
-      };
-    in {
+    in
+    {
       packages = {
         inherit confSrc runConformanceTest;
       };
 
       defaultPackage = runConformanceTest;
-
-
-      devShell = (import leanShell { inherit pkgs leanPkgs; nix = leanPkgs.nix; leanPkg = pkg; }).shell;
     });
 }
 

@@ -48,35 +48,37 @@ def addImportDeps (f: FileDescriptorProto): ProtoGenM Unit := do
 -- Building the context: the incoming proto request doesn't contain
 -- enough information to do generation in a streaming way, so first
 -- we go through everything and build up a context
-structure ContextPrepState where
-  enums : Array (String × (ASTPath × EnumDescriptorProto)) := #[]
-  oneofs : Array (String × (ASTPath × OneofDescriptorProto)) := #[]
-  messages : Array (String × ASTPath) := #[]
-  deriving Inhabited
+namespace ContextPrep
+  structure ContextPrepState where
+    enums : Array (String × (ASTPath × EnumDescriptorProto)) := #[]
+    oneofs : Array (String × (ASTPath × OneofDescriptorProto)) := #[]
+    messages : Array (String × ASTPath) := #[]
+    deriving Inhabited
 
-def prepareContextRecurseFile (d: ASTPath) (_: Unit): StateM ContextPrepState Unit := do
-  let mut s ← get
-  let extraS : ContextPrepState := match d.revMessages.head? with 
-  | some m => {
-    enums := m.enumType.map (fun e => (d.protoFullPath ++ "." ++ e.name, (d, e))),
-    oneofs := m.oneofDecl.map (fun e => (d.protoFullPath ++ "." ++ e.name, (d, e))),
-    messages := #[(d.protoFullPath, d)]
+  def prepareContextRecurseFile (d: ASTPath) (_: Unit): StateM ContextPrepState Unit := do
+    let mut s ← get
+    let extraS : ContextPrepState := match d.revMessages.head? with 
+    | some m => {
+      enums := m.enumType.map (fun e => (d.protoFullPath ++ "." ++ e.name, (d, e))),
+      oneofs := m.oneofDecl.map (fun e => (d.protoFullPath ++ "." ++ e.name, (d, e))),
+      messages := #[(d.protoFullPath, d)]
+      }
+    | none => {
+      enums := d.file.enumType.map (fun e => (d.protoFullPath ++ "." ++ e.name, (d, e))),
     }
-  | none => {
-    enums := d.file.enumType.map (fun e => (d.protoFullPath ++ "." ++ e.name, (d, e))),
-  }
 
-  set { 
-    enums := s.enums ++ extraS.enums, 
-    oneofs := s.oneofs ++ extraS.oneofs, 
-    messages := s.messages ++ extraS.messages
-    : ContextPrepState}
+    set { 
+      enums := s.enums ++ extraS.enums, 
+      oneofs := s.oneofs ++ extraS.oneofs, 
+      messages := s.messages ++ extraS.messages
+      : ContextPrepState}
 
-def prepareContext (r: Compiler.CodeGeneratorRequest) (rootPackage: String): ContextPrepState :=   
-  let rec doWork (f: FileDescriptorProto) : StateM ContextPrepState PUnit := do
-    recurseM ((ASTPath.init f rootPackage), ()) (wrapRecurseFn prepareContextRecurseFile true)
-  let doWorkM := r.protoFile.forM $ doWork
-  StateT.run doWorkM {} |> Id.run |> Prod.snd
+  def prepareContext (r: Compiler.CodeGeneratorRequest) (rootPackage: String): ContextPrepState :=   
+    let rec doWork (f: FileDescriptorProto) : StateM ContextPrepState PUnit := do
+      recurseM ((ASTPath.init f rootPackage), ()) (wrapRecurseFn prepareContextRecurseFile true)
+    let doWorkM := r.protoFile.forM $ doWork
+    StateT.run doWorkM {} |> Id.run |> Prod.snd
+end ContextPrep
 
 -- Generate code for a single .proto file
 def doWork (file: FileDescriptorProto) : ProtoGenM $ List CodeGeneratorResponse_File := do
@@ -117,7 +119,8 @@ def doWork (file: FileDescriptorProto) : ProtoGenM $ List CodeGeneratorResponse_
   addLine ""
   addLine s!"end {package}"
 
-  let protoFile := CodeGeneratorResponse_File.mk (outputFilePath file (← read).namespacePrefix) "" ("\n".intercalate (← get).lines.toList) none
+  let protoFile := CodeGeneratorResponse_File.mk
+    (outputFilePath file (← read).namespacePrefix) "" ("\n".intercalate (← get).lines.toList) none
 
   let services := file.service
   if services.size == 0 then return [protoFile]
@@ -137,8 +140,10 @@ def doWork (file: FileDescriptorProto) : ProtoGenM $ List CodeGeneratorResponse_
   generateGRPC file
   addLine ""
   addLine s!"end {package}"
-  let grpcFile := CodeGeneratorResponse_File.mk (grpcOutputFilePath file (← read).namespacePrefix) "" ("\n".intercalate (← get).lines.toList) none
+  let grpcFile := CodeGeneratorResponse_File.mk 
+    (grpcOutputFilePath file (← read).namespacePrefix) "" ("\n".intercalate (← get).lines.toList) none
   return [protoFile, grpcFile]
+
 
 def main(argv: List String): IO UInt32 := do
   let i ← IO.getStdin
@@ -160,7 +165,7 @@ def main(argv: List String): IO UInt32 := do
   let fileProtos := rbmapOfC (request.protoFile.map fun x => (x.name, x))
   let fileProtosToWrite := request.protoFile.filter fun v => filesToWrite.contains v.name
 
-  let contextAux := prepareContext request namespacePrefix
+  let contextAux := ContextPrep.prepareContext request namespacePrefix
   let ctxForFile (f: FileDescriptorProto) := ProtoGenContext.mk namespacePrefix fileProtos f
     (rbmapOfC contextAux.enums)
     (rbmapOfC contextAux.oneofs)
@@ -183,5 +188,4 @@ def main(argv: List String): IO UInt32 := do
 
   let r ← LeanProto.ProtoSerialize.serialize response
   o.write r
-
   return 0

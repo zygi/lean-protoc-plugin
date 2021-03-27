@@ -1,0 +1,2 @@
+Recommended.Proto3.ProtobufInput.ValidDataScalarBinary.UINT32[5].ProtobufOutput
+Required.Proto3.ProtobufInput.UnknownVarint.ProtobufOutput

@@ -185,21 +185,21 @@ def getLogicalFields (path: ASTPath) : ProtoGenM $ Array LogicalField := do
 
 -- Field types
 def bareFieldTypeName(fd: FieldDescriptorProto) : ProtoGenM String := do match fd.type with
-| FieldDescriptorProto_Type.TYPE_INT32 => "Int"
-| FieldDescriptorProto_Type.TYPE_INT64 => "Int"
-| FieldDescriptorProto_Type.TYPE_UINT32 => "Nat"
-| FieldDescriptorProto_Type.TYPE_UINT64 => "Nat"
-| FieldDescriptorProto_Type.TYPE_SINT32 => "Int"
-| FieldDescriptorProto_Type.TYPE_SINT64 => "Int"
-| FieldDescriptorProto_Type.TYPE_FIXED32 => "Int"
-| FieldDescriptorProto_Type.TYPE_FIXED64 => "Int"
-| FieldDescriptorProto_Type.TYPE_SFIXED32 => "Int"
-| FieldDescriptorProto_Type.TYPE_SFIXED64 => "Int"
-| FieldDescriptorProto_Type.TYPE_DOUBLE => "Float"
-| FieldDescriptorProto_Type.TYPE_FLOAT => "Float"
-| FieldDescriptorProto_Type.TYPE_BOOL => "Bool"
-| FieldDescriptorProto_Type.TYPE_STRING => "String"
-| FieldDescriptorProto_Type.TYPE_BYTES => "ByteArray"
+| FieldDescriptorProto_Type.TYPE_INT32 => "_root_.Int"
+| FieldDescriptorProto_Type.TYPE_INT64 => "_root_.Int"
+| FieldDescriptorProto_Type.TYPE_UINT32 => "_root_.Nat"
+| FieldDescriptorProto_Type.TYPE_UINT64 => "_root_.Nat"
+| FieldDescriptorProto_Type.TYPE_SINT32 => "_root_.Int"
+| FieldDescriptorProto_Type.TYPE_SINT64 => "_root_.Int"
+| FieldDescriptorProto_Type.TYPE_FIXED32 => "_root_.Int"
+| FieldDescriptorProto_Type.TYPE_FIXED64 => "_root_.Int"
+| FieldDescriptorProto_Type.TYPE_SFIXED32 => "_root_.Int"
+| FieldDescriptorProto_Type.TYPE_SFIXED64 => "_root_.Int"
+| FieldDescriptorProto_Type.TYPE_DOUBLE => "_root_.Float"
+| FieldDescriptorProto_Type.TYPE_FLOAT => "_root_.Float"
+| FieldDescriptorProto_Type.TYPE_BOOL => "_root_.Bool"
+| FieldDescriptorProto_Type.TYPE_STRING => "_root_.String"
+| FieldDescriptorProto_Type.TYPE_BYTES => "_root_.ByteArray"
 | FieldDescriptorProto_Type.TYPE_ENUM => do
   let e ← ctxFindEnum fd.typeName
   enumFullLeanPath (← e.unwrap)

@@ -1,6 +1,11 @@
 {
   description = "LeanProto conformance test";
 
+  # Note: when running this, Lean takes an impractically long time to derive Repr instances for 
+  # the conformance test protos so I comment out "Repr" from `messageDerivingList` in 
+  # LeanProtocPlugin/Logic.lean. TODO: make `messageDerivingList` a parameter users can provide
+  # to the plugin.
+
   inputs.nixpkgs.url = github:NixOS/nixpkgs/nixpkgs-unstable;
 
   inputs.lean.url = github:leanprover/lean4;
@@ -67,7 +72,6 @@
       packages = {
         inherit confSrc runConformanceTest;
       };
-
       defaultPackage = runConformanceTest;
     });
 }

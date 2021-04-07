@@ -278,7 +278,7 @@
         "nixpkgs": "nixpkgs_5"
       },
       "locked": {
-        "narHash": "sha256-qFf48RQiO0iZTi3he0kwBhZQZd3lZ+2EG/GGlctZ5Gs=",
+        "narHash": "sha256-ZmQghCQpUOn+gpS0Rb8sWsG5fGRIZqs0HH3lWcISiwY=",
         "path": "../",
         "type": "path"
       },

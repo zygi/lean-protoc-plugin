@@ -212,9 +212,9 @@ def fullFieldTypeName(lf: LogicalField) : ProtoGenM String := match lf with
   | LogicalField.map _ k v => do
     let k ← bareFieldTypeName k
     let v ← bareFieldTypeName v  
-    return s!"(AssocList ({k}) ({v}))"
-  | LogicalField.repeated v => return s!"(Array ({← bareFieldTypeName v}))"
-  | LogicalField.optional v => return s!"(Option ({← bareFieldTypeName v}))"
+    return s!"(_root_.Std.AssocList ({k}) ({v}))"
+  | LogicalField.repeated v => return s!"(_root_.Array ({← bareFieldTypeName v}))"
+  | LogicalField.optional v => return s!"(_root_.Option ({← bareFieldTypeName v}))"
   | LogicalField.nonoptional v => return s!"({← bareFieldTypeName v})"
   | LogicalField.oneof f od _ => do
     return s!"(Option ({← oneofFullLeanPath od}))"

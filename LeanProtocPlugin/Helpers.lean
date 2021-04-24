@@ -25,14 +25,14 @@ def String.toCamelCase (s: String) (firstCap : Bool) : String := do
 #assert (String.toCamelCase "one_two__three_" true) == "OneTwoThree"
 #assert (String.toCamelCase "one_two__three_" false) == "oneTwoThree"
 
-def rbtreeOfC [HasLess α] [(a b : α) → Decidable (a < b)] (a: Array α) :=
-  Std.rbtreeOf a.toList (fun x y => decide $ HasLess.Less x y)
+def rbtreeOfC [LT α] [(a b : α) → Decidable (a < b)] (a: Array α) :=
+  Std.rbtreeOf a.toList (fun x y => decide $ LT.lt x y)
 
-def rbmapOfC [HasLess α] [(a b : α) → Decidable (a < b)] (a: Array (α × β)) :=
-  Std.rbmapOf a.toList (fun x y => decide $ HasLess.Less x y)
+def rbmapOfC [LT α] [(a b : α) → Decidable (a < b)] (a: Array (α × β)) :=
+  Std.rbmapOf a.toList (fun x y => decide $ LT.lt x y)
 
-abbrev Std.RBMapC (α β) [HasLess α] [(a b : α) → Decidable (a < b)] := Std.RBMap α β (fun x y => decide $ HasLess.Less x y)
-abbrev Std.RBTreeC (α) [HasLess α] [(a b : α) → Decidable (a < b)] := Std.RBTree α (fun x y => decide $ HasLess.Less x y)
+abbrev Std.RBMapC (α β) [LT α] [(a b : α) → Decidable (a < b)] := Std.RBMap α β (fun x y => decide $ LT.lt x y)
+abbrev Std.RBTreeC (α) [LT α] [(a b : α) → Decidable (a < b)] := Std.RBTree α (fun x y => decide $ LT.lt x y)
 
 def String.stripFileEnding (s: String) := (s.dropRightWhile (· != '.')).dropRight 1
 

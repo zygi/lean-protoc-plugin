@@ -10,7 +10,7 @@ open LeanProtocPlugin.Google.Protobuf.Compiler
 open LeanProtocPlugin.Google.Protobuf
 
 def enumDerivingList := ["Repr", "Inhabited", "BEq"]
-def messageDerivingList := ["Repr", "BEq"]
+def messageDerivingList := ["BEq"]
 
 
 def outputFilePath (fd: FileDescriptorProto) (root: String) : String := do
@@ -29,15 +29,15 @@ def messageFullLeanPath (t: ASTPath) : ProtoGenM String := do
 
 def enumFullLeanPath (t: (ASTPath × EnumDescriptorProto)) : ProtoGenM String := do
   let n := protoEnumNameToLean t.snd.name
-  return match t.fst.revMessages.head? with
-  | some _ => (← messageFullLeanPath t.fst) ++ "_" ++ n
-  | none => (← messageFullLeanPath t.fst) ++ n
+  match t.fst.revMessages.head? with
+  | some _ => do return (← messageFullLeanPath t.fst) ++ "_" ++ n
+  | none => do return (← messageFullLeanPath t.fst) ++ n
 
 def oneofFullLeanPath (t: (ASTPath × OneofDescriptorProto)) : ProtoGenM String := do
   let n := protoOneofNameToLean t.snd.name
-  return match t.fst.revMessages.head? with
-  | some _ => (← messageFullLeanPath t.fst) ++ "_" ++ n
-  | none => (← messageFullLeanPath t.fst) ++ n
+  match t.fst.revMessages.head? with
+  | some _ => do return (← messageFullLeanPath t.fst) ++ "_" ++ n
+  | none => do return (← messageFullLeanPath t.fst) ++ n
 
 
 def oneofFullProtoPath (t: (ASTPath × OneofDescriptorProto)) : String := do
@@ -191,8 +191,8 @@ def bareFieldTypeName(fd: FieldDescriptorProto) : ProtoGenM String := do match f
 | FieldDescriptorProto_Type.TYPE_UINT64 => "_root_.Nat"
 | FieldDescriptorProto_Type.TYPE_SINT32 => "_root_.Int"
 | FieldDescriptorProto_Type.TYPE_SINT64 => "_root_.Int"
-| FieldDescriptorProto_Type.TYPE_FIXED32 => "_root_.Int"
-| FieldDescriptorProto_Type.TYPE_FIXED64 => "_root_.Int"
+| FieldDescriptorProto_Type.TYPE_FIXED32 => "_root_.UInt32"
+| FieldDescriptorProto_Type.TYPE_FIXED64 => "_root_.UInt64"
 | FieldDescriptorProto_Type.TYPE_SFIXED32 => "_root_.Int"
 | FieldDescriptorProto_Type.TYPE_SFIXED64 => "_root_.Int"
 | FieldDescriptorProto_Type.TYPE_DOUBLE => "_root_.Float"
@@ -228,8 +228,8 @@ let val ← match fd.type with
 | FieldDescriptorProto_Type.TYPE_UINT64 => "(LeanProto.EncDec.withIgnoredState LeanProto.EncDec.parseUInt64AsNat)"
 | FieldDescriptorProto_Type.TYPE_SINT32 => "(LeanProto.EncDec.withIgnoredState LeanProto.EncDec.parseSInt32)"
 | FieldDescriptorProto_Type.TYPE_SINT64 => "(LeanProto.EncDec.withIgnoredState LeanProto.EncDec.parseSInt64)"
-| FieldDescriptorProto_Type.TYPE_FIXED32 => "(LeanProto.EncDec.withIgnoredState LeanProto.EncDec.parseFixedInt32AsInt)"
-| FieldDescriptorProto_Type.TYPE_FIXED64 => "(LeanProto.EncDec.withIgnoredState LeanProto.EncDec.parseFixedInt64AsInt)"
+| FieldDescriptorProto_Type.TYPE_FIXED32 => "(LeanProto.EncDec.withIgnoredState LeanProto.EncDec.parseFixedUInt32)"
+| FieldDescriptorProto_Type.TYPE_FIXED64 => "(LeanProto.EncDec.withIgnoredState LeanProto.EncDec.parseFixedUInt64)"
 | FieldDescriptorProto_Type.TYPE_SFIXED32 => "(LeanProto.EncDec.withIgnoredState LeanProto.EncDec.parseSFixed32)"
 | FieldDescriptorProto_Type.TYPE_SFIXED64 => "(LeanProto.EncDec.withIgnoredState LeanProto.EncDec.parseSFixed64)"
 | FieldDescriptorProto_Type.TYPE_DOUBLE => "(LeanProto.EncDec.withIgnoredState LeanProto.EncDec.parseFloat64AsFloat)"
@@ -280,8 +280,8 @@ let val ← match fd.type with
 | FieldDescriptorProto_Type.TYPE_UINT64 => "LeanProto.EncDec.serializeNatAsUInt64"
 | FieldDescriptorProto_Type.TYPE_SINT32 => "LeanProto.EncDec.serializeIntAsSInt32"
 | FieldDescriptorProto_Type.TYPE_SINT64 => "LeanProto.EncDec.serializeIntAsSInt64"
-| FieldDescriptorProto_Type.TYPE_FIXED32 => "LeanProto.EncDec.serializeIntAsFixedInt32"
-| FieldDescriptorProto_Type.TYPE_FIXED64 => "LeanProto.EncDec.serializeIntAsFixedInt64"
+| FieldDescriptorProto_Type.TYPE_FIXED32 => "LeanProto.EncDec.serializeFixedUInt32"
+| FieldDescriptorProto_Type.TYPE_FIXED64 => "LeanProto.EncDec.serializeFixedUInt64"
 | FieldDescriptorProto_Type.TYPE_SFIXED32 => "LeanProto.EncDec.serializeIntAsSFixed32"
 | FieldDescriptorProto_Type.TYPE_SFIXED64 => "LeanProto.EncDec.serializeIntAsSFixed64"
 | FieldDescriptorProto_Type.TYPE_DOUBLE => "LeanProto.EncDec.serializeFloatAsFloat64"

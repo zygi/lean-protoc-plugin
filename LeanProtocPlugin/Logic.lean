@@ -10,7 +10,7 @@ open LeanProtocPlugin.Google.Protobuf.Compiler
 open LeanProtocPlugin.Google.Protobuf
 
 def enumDerivingList := ["Repr", "Inhabited", "BEq"]
-def messageDerivingList := ["BEq"]
+def messageDerivingList := ["Repr", "BEq"]
 
 
 def outputFilePath (fd: FileDescriptorProto) (root: String) : String := do

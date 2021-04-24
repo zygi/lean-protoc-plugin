@@ -11,6 +11,7 @@ open LeanProtocPlugin.Google.Protobuf
 
 def enumDerivingList := ["Repr", "Inhabited", "BEq"]
 def messageDerivingList := ["Repr", "BEq"]
+def oneofDerivingList := ["Repr", "Inhabited", "BEq"]
 
 
 def outputFilePath (fd: FileDescriptorProto) (root: String) : String := do
@@ -439,30 +440,33 @@ def generateMessageDeclarations (fd: FileDescriptorProto) : ProtoGenM Unit := do
 
 def generateLeanDeriveStatements (fd: FileDescriptorProto) : ProtoGenM Unit := do
   -- First, traverse the tree and build up a list of all typenames of msgs and oneofs
-  let WithListState := StateT (List String) ProtoGenM
+  let WithListState := StateT ((List String) × (List String)) ProtoGenM
   let doOne (p: ASTPath): WithListState Unit := do
     match p.revMessages.head? with
     | none => return
     | some m => do
     let logFields ← getLogicalFields p
-    let mut state := [(← messageFullLeanPath p)]
-
+    
+    let mut oneofState := []
+  
     for lf in logFields do 
       match lf with
-      | LogicalField.oneof f o _ => state := (← oneofFullLeanPath o) :: state 
+      | LogicalField.oneof f o _ => oneofState := (← oneofFullLeanPath o) :: oneofState 
       | _ => ()
     
-    set (state ++ (← get))
+    let curr ← get
+    set (((← messageFullLeanPath p) :: curr.fst), (oneofState ++ curr.snd))
 
 
   -- Run the first state monad to get the list
   let initPath ← ASTPath.initM fd
   let m := recurseM (μ := WithListState) (initPath, ()) (wrapRecurseFn (fun x _ => doOne x))
-  let ⟨ r, s ⟩  ← StateT.run m []
+  let ⟨ r, ⟨ msgs, oneofs ⟩ ⟩  ← StateT.run m ([], [])
   
-  let derives := ", ".intercalate messageDerivingList
-  let idents := ", ".intercalate s
-  addLine s!"deriving instance {derives} for {idents}"
+  if msgs.length > 0 then
+    addLine s!"deriving instance {", ".intercalate messageDerivingList} for {", ".intercalate msgs}"
+  if oneofs.length > 0 then
+    addLine s!"deriving instance {", ".intercalate oneofDerivingList} for {", ".intercalate oneofs}"
   r
 
 -- TODO: rewrite as proper Lean derives

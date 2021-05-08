@@ -25,14 +25,14 @@ def String.toCamelCase (s: String) (firstCap : Bool) : String := do
 #assert (String.toCamelCase "one_two__three_" true) == "OneTwoThree"
 #assert (String.toCamelCase "one_two__three_" false) == "oneTwoThree"
 
-def rbtreeOfC [LT α] [(a b : α) → Decidable (a < b)] (a: Array α) :=
-  Std.rbtreeOf a.toList (fun x y => decide $ LT.lt x y)
+def rbtreeOfC [Ord α] (a: Array α) :=
+  Std.rbtreeOf a.toList Ord.compare
 
-def rbmapOfC [LT α] [(a b : α) → Decidable (a < b)] (a: Array (α × β)) :=
-  Std.rbmapOf a.toList (fun x y => decide $ LT.lt x y)
+def rbmapOfC [Ord α] (a: Array (α × β)) :=
+  Std.rbmapOf a.toList Ord.compare
 
-abbrev Std.RBMapC (α β) [LT α] [(a b : α) → Decidable (a < b)] := Std.RBMap α β (fun x y => decide $ LT.lt x y)
-abbrev Std.RBTreeC (α) [LT α] [(a b : α) → Decidable (a < b)] := Std.RBTree α (fun x y => decide $ LT.lt x y)
+abbrev Std.RBMapC (α β) [Ord α] := Std.RBMap α β Ord.compare
+abbrev Std.RBTreeC (α) [Ord α] := Std.RBTree α Ord.compare
 
 def String.stripFileEnding (s: String) := (s.dropRightWhile (· != '.')).dropRight 1
 

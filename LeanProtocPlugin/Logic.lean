@@ -631,7 +631,7 @@ def generateGRPC (fd: FileDescriptorProto) : ProtoGenM Unit := do
     addLine s!"  handlers_ := Std.rbmapOf ["
     let lines ← endpointInfo.mapM (fun ⟨_, entry⟩ => entry)
     addLine $ ",\n".intercalate lines.toList
-    addLine s!"  ] (fun a b => a < b)"
+    addLine s!"  ] Ord.compare"
     addLine ""
 
   let _ ← fd.service.mapM generateService

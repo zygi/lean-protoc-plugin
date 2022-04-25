@@ -1,3 +1,6 @@
+# Warning: Out Of Date
+This project hasn't been updated for a while. It will very likely not build with new Lean versions. PRs to bring this library up to date are welcome. Or just pester me enough in the Issues tab and there's a chance I'll update it :)
+
 ## Protocol buffers in Lean 4
 
 A third-party protocol buffer code generator for Lean 4. 
